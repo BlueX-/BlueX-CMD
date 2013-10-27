@@ -1,2 +1,2 @@
-test
+Visit the wiki
 ====
