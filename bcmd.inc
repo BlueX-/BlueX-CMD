@@ -1,54 +1,131 @@
-/*
-	bCMD - New Command Processor
-		Creator: BlueX
-		Version: 1.8
-		Last Update: 17/12/2012
-*/
-#if defined _bcmd_include
-    #endinput
-#endif
-#define _bcmd_include
-#include <a_samp>
+#include <similar_text>
 
-#define bCMD[%0]>(%1:%2:%3)\
-    forward bcmd_%0(%1,%2,%3);\
-	public bcmd_%0(%1,%2,%3)
-	
-#define CMD::%0(%1,%2,%3)\
-    bCMD[%0]>(%1:%2:%3)
+#define words::%0(%1) \
+    _words_lib_%0(%1)
+
+#define _MAX_BAD_WORDS  10
+#define _MAX_WORD_LEN   16
+#define _MIN_PERCENTAGE 5.0
+
+new
+    _bad_words[_MAX_BAD_WORDS][_MAX_WORD_LEN]
+    //variable that stores all words located in badwords.txt
+
+;
+
+
+
+public OnGameModeInit()
+{
+    //hook
+    #if defined _word_lib_OnGameModeInit
+        _word_lib_OnGameModeInit();
+    #endif
+    //end of hook
+
+    _words_lib_get_words(); //function to get all words from badwords.txt
     
-#define cmd(%0:%1,%2,%3)\
-    bCMD[%0]>(%1:%2:%3)
-
-#if !defined isnull
-	#define isnull(%1) \
-				((!(%1[0])) || (((%1[0]) == '\1') && (!(%1[1]))))
+    return 1;
+}
+//hook
+#if defined _ALS_OnGameModeInit
+    #undef OnGameModeInit
+#else
+    #define _ALS_OnGameModeInit
 #endif
+#define OnGameModeInit _word_lib_OnGameModeInit
+#if defined _word_lib_OnGameModeInit
+    forward _word_lib_OnGameModeInit();
+#endif
+//end of hook
 
-forward OnPlayerCallCommand(playerid,cmdtext[],sucess);
-const
-    C_COMMAND_LEN = 32,
-    C_KEY_LEN = 2,
-	C_PARAMS_LEN = 255;
+public OnPlayerText(playerid,text[])
+{
+    //hook
+    #if defined _word_lib_OnPlayerText
+        _word_lib_OnPlayerText(playerid,text);
+    #endif
+    //end of hook
 
-public OnPlayerCommandText(playerid,cmdtext[]){
-	new key1[C_KEY_LEN],params1[C_PARAMS_LEN] = "\1",callback1[32] = "bcmd_";
-	strmid(key1,cmdtext,0,1),strdel(cmdtext,0,1);
-	if(strfind(cmdtext," ") != -1) strmid(params1,cmdtext,strfind(cmdtext," ")+1,255),strdel(cmdtext,strfind(cmdtext," "),255);
-	strins(callback1,cmdtext,5);
-	if(funcidx(callback1) == -1)
-	    strins(cmdtext,key1,0,32),CallLocalFunction("OnPlayerCallCommand","dsd",playerid,cmdtext,0);
-	else {
-		CallLocalFunction(callback1,"dsd",playerid,isnull(params1) ? ("\1") : (params1),!strcmp(params1,"help",false) || !strcmp(params1,"ajuda",false));
-        strins(cmdtext,key1,0,32),CallLocalFunction("OnPlayerCallCommand","dsd",playerid,cmdtext,1);
-	}
-	return 1;
+    //we do a loop to check all words from _bad_words[i]
+    for(new i; i < _MAX_BAD_WORDS; i++)
+    {
+        //check if the percentage from similar_text is > than _MIN_PERCENTAGE (5.0)
+        if(similar_text(text,_bad_words[i]) > _MIN_PERCENTAGE)
+        {
+            //check if the text contais a _bad_words
+            if(strfind(text,_bad_words[i]) != -1)
+            {
+                //if the text contains a _bad_word the averange will be 100.00
+                CallLocalFunction("OnPlayerSayBadWord","dssf",playerid,text,_bad_words[i],100.0);
+                return false;
+                //returning false to avoid bugs
+            }
+            else
+                CallLocalFunction("OnPlayerSayBadWord","dssf",playerid,text,_bad_words[i],similar_text(text,_bad_words[i]));
+            if(i == (_MAX_BAD_WORDS-1))
+                return false;
+            //the text will not be sent to the server.
+        }
+    }
+    
+    return 1;
+}
+//hook
+#if defined _ALS_OnPlayerText
+    #undef OnPlayerText
+#else
+    #define _ALS_OnPlayerText
+#endif
+#define OnPlayerText _word_lib_OnPlayerText
+#if defined _word_lib_OnPlayerText
+    forward _word_lib_OnPlayerText(playerid,text[]);
+#endif
+//end of hook
+
+
+/*
+    functions
+*/
+
+stock words::get_words()
+{
+    //check if the file exists
+    if(fexist("badwords.txt"))
+    {
+        //if yes load the file
+        new File:words = fopen("badwords.txt",io_read);
+        for(new i; i < _MAX_BAD_WORDS; i++)
+        {
+            fread(words,_bad_words[i]);
+            if( i != (_MAX_BAD_WORDS - 1 ))
+                _bad_words[i][strlen(_bad_words[i]) - 2] = EOS;
+            printf("str: %s , len: %d",_bad_words[i], strlen(_bad_words[i]));
+        }
+        fclose(words);
+        return true;
+    }
+    //if not create a file
+    else
+    {
+        new File:words = fopen("badwords.txt",io_append);
+        if(words)
+        {
+            fclose(words);
+        }
+        print("Aviso: O ficheiro badwords.txt foi criado, é necessário colocar palavras!");
+        return false;
+    }
 }
 
-#if defined _ALS_OnPlayerCommandText
-    #undef OnPlayerCommandText
-#else
-    #define _ALS_OnPlayerCommandText
-#endif
-#define OnPlayerCommandText bcmd_OnPlayerCommandText
-forward bcmd_OnPlayerCommandText(playerid, cmdtext[]);
+/*
+    called functions
+*/
+
+forward OnPlayerSayBadWord(playerid,text[],badword[],Float:averange);
+/*
+    playerid - the id of the player
+    text - the text that the player will sent
+    badword - the badword that the player could say
+    averange - the averange between the badword and the text , returned by similar_text or strfind check
+*/
